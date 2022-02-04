@@ -1,0 +1,655 @@
+---
+title: Modelos mixtos generalizados para predecir fallecidos por Covid 19 en Colombia.
+author: Oliver Orley Rodriguez Berrocal.
+date: Febrero, 4, 2022.
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Introducción:
+
+En diciembre de 2019, en la ciudad de Wuhan de la provincia de Hubei en China, hubo un brote epidémico de neumonía de origen desconocido, donde se vieron afectados en este mes 60 personas. Las autoridades de salud, se dieron a la tarea de investigar acerca de esta enfermedad y encontraron que los enfermos se relacionaban con un mercado de esta ciudad. Luego de tomar las correspondientes muestras e investigar este virus el Comité de Salud Municipal de Wuhan informó a la Organización Mundial de la Salud, con el fin de tomar las medidas correspondientes. El 7 de enero de 2020 los científicos chinos habían aislado el virus causante de la enfermedad, y realizaron la secuenciación del genoma.
+
+
+![Imagen del mercado de Wuhan tomada de  (7).](wuhan.png) 
+
+A pesar de los esfuerzos realizados por el gobierno chino de controlar la enfermedad, cerrando este mercado, aislando a las personas que estuvieron de alguna manera involucrados con los contagiados, haciendo cordones de seguridad en algunas zonas con posibles brotes y más, no pudieron contenerlo. Todo lo contrario, se empezó multiplicar casi de manera descontrolada.
+
+Dado que este virus es altamente infeccioso, fácilmente se propagó por cada ciudad, país y continente, debido principalmente a los casos de personas asintomáticas o inconscientes de la magnitud del problema y a la globalización, siendo el virus exportado a prácticamente todo el mundo.
+
+
+![Imagen tomada de  (8).](corona_mundo.png) 
+
+
+Desafortunadamente, fue el momento de Colombia. El primer caso en Colombia se conoció el 6 de marzo del 2020, de un paciente proveniente de Milán Italia, dando así el inicio de la difícil situación sanitaria que enfrenta Colombia.
+
+
+# 1. Descripción de la base de datos y sus variables.
+
+
+![Imagen corona virus tomada de  (3).](covid colombia.jfif) 
+
+
+El conjunto de datos que se utilizará en esta aplicación, es la base de datos de covid-19 de Colombia, que tiene registros aproximadamente desde inicios del año 2020 hasta la fecha 20/01/2022. Esta base datos cuenta con más de 5.7 millones de datos y cuenta con un total de 23 variables. El estudio va dirigido a los casos antes de iniciada la vacunación, esto es antes del 20 de febrero del 2021, contando con aproximadamente 2 millones de registros. Para este estudio solo emplearemos 6 variables.
+
+Las variables y su descripción es la siguiente:
+
+
+
+```{r, echo=FALSE}
+x <- data.frame(Varaibles = c("Edad", "Sexo", "Recuperado", "Nombre municipio", "Código DIVIPOLA 
+municipio", "Pertenencia étnica"), 
+                Descripción = c("Edad del paciente.", "Géro del paciente", "Se recuperó o falleció.","Nombre municipio",  "Código del municipio", "Pertenece alguna etnica"),
+                Tipo = c("Numerica.", "Categorica 2 niveles.", "Categorica 2 niveles.", "Categorica 1032 niveles.", "Categorica 1110 niveles.", "Categorica 6 niveles"),
+explicación = c("25,54...", "m, f", "recuperado, fallecido", "BOGOTA, BUGA, MEDELLIN,...", "11001, 76111, 5001,... ", "1-Indígena,
+2-ROM,
+3-Raizal,
+4-Palenquero,
+5-Negro,
+6-Otro")
+)
+#library(k)
+kableExtra::kable(x[,])
+```
+
+
+Los datos fueron obtenidos de **datos abiertos**. Si desea revisarlos por favor ingrese al siguiente [enlace](https://www.datos.gov.co/Salud-y-Protecci-n-Social/Casos-positivos-de-COVID-19-en-Colombia/gt2j-8ykr/data).
+
+Si desea conocer todas las variables y su descripción, por favor ingrese al siguiente [enlace](https://www.ins.gov.co/BibliotecaDigital/dataset-casos.pdf).
+
+```{r, include=FALSE}
+library(tidyverse)
+library(lme4)
+library(beepr)
+library(kableExtra)
+```
+
+
+
+```{r, include=FALSE}
+# A partir de aqui, tenemos los datos limpios.
+data <- readRDS(file = "covid_antes_vacuna.RDS" )
+data2 <- data
+data2$edad <- scale(data2$edad)
+data2$recuperado <- ifelse(data2$recuperado == "fallecido", 1, 0)
+data2 <- data2 %>% mutate_if(is.character, as.factor)
+
+```
+
+
+
+
+# 2. Objetivo del estudio:
+
+### Objetivos generales:
+* Organizar los datos de tal manera que puedan se analizados.
+* Conocer y entender los datos a modelar.
+* Realizar analisis gráficos.
+* Proponer posibles relacione e hipotesis de los datos.
+* Plantear modelos para realiar predicciones.
+* Aplicar diferentes estadísticas a los datos y a los modelos.
+
+### Objetivos específicos:
+
+* Se plantearán varios modelos.
+* Con base a estadísticos se seleccionará el mejor.
+* También se analizarán los residuos.
+* Finalmente, se seleccionará el mejor modelo.
+
+El propósito del estudio consiste en usar modelos jerárquicos para predecir si una persona diagnosticada con covid-19 puede fallecer o no por esta causa. Estos modelos se ajustarán teniendo en cuenta las covariables que se consideran de mayor relevancia para predecir. Un uso útil de estos modelos puede ser para aplicarlo en pacientes con covid-19 que llegan a una clínica u hospital y brindar prioridad de atención a los pacientes con mayor riesgo de muerte.
+
+# 3. Análisis descriptivo:
+
+### Gráficas univariadas que componen el modelo:
+
+Con el propósito de conocer las variables con las que se trabajarán, se realizarán las siguientes gráficas descriptivas y con esto empezar a tener una buena perspectiva gráfica de lo que los datos tienen para enseñarnos.
+
+
+
+```{r, eval=T, echo=FALSE}
+library(treemapify)
+data %>% group_by(nom_municipio) %>% count() %>% 
+ggplot(., aes(area = n, fill = nom_municipio, label = paste(nom_municipio, sep = "\n"))) +
+    geom_treemap()  +
+  geom_treemap_text(colour = "white",
+                    place = "centre",
+                    size = 15)+
+  theme(legend.position = "none")
+
+# ggsave("treechar.jpeg", limitsize = T)
+# ggsave("treechar2.jpeg",, limitsize = T)
+# ggsave("treechar3.jpeg", limitsize = T)
+```
+
+En esta gráfica podemos observar la cantidad de contagios, discriminados por cada municipio, podemos notar que la mayor cantidad de contagios se observan en Bogota, luego Medellín, luego Cali y así sucesivamente.
+
+Para conocer la distribución de las edades, se realizará el siguiente histograma:
+
+```{r, eval=T, echo=FALSE, message=F, warning=F}
+ggplot(data = data, aes(edad))+
+       geom_histogram(col = 3, fill= 3, alpha = 0.4)+ 
+    geom_vline(xintercept = 27.00, alpha = 0.6, linetype = "dashed") +
+    geom_vline(xintercept = 52.00, alpha = 0.6, linetype = "dashed") +
+    labs(title = "Distribución de edades de los contagiados por covid-19.", 
+         x= "Edad", y="Conteo")+
+    theme_minimal()
+
+```
+
+Se observa que los contagios se propagan a todos los rangos posibles de edad, pero vemos en el histograma, que las frecuencias de edad más comunes son aproximadamente entre 25 y 60 años. Las línea punteadas representan el rango intercuartil, que es entre 27 y 56 años.
+
+Ahora obsevemos la cantidad de pacientes por genero:
+```{r, echo=FALSE}
+ggplot(data = data[,], aes(sexo))+
+    geom_bar(col = 4, fill= 4, alpha = 0.4)+ 
+    labs(title = "Cantidad de contagios por genero de covid-19.", 
+         x= "Genero", y="Conteo")+
+    theme_minimal()
+```
+
+Podemos observar que la cantidad de contagios es un poco mayor en mujeres, que de hombres antes de comenzar la vacunación. Este resultado podría variar, con los nuevos casos que se irán presentando.
+
+Será también interesante ver la cantidad de contagios, por etnia:
+
+
+```{r, echo=FALSE}
+ggplot(data = data[,], aes(pertenencia_etnica)) +
+    geom_bar(col = 5, fill= 5, alpha = 0.4) + 
+    labs(title = "Cantidad de contagios de covid-19 por etnia.", 
+         x= "Etnia", y="Conteo") +
+    theme_minimal()
+```
+
+Es claro que la etnia con categoría 6(ninguno) es el más frecuente, y entre los restantes, la etnia 5 (negra) y el 1 (indígena), son los similares siendo 5 un poco mayor. También se nota que el 4(palenquero) no se registra en la base de datos.
+
+Ahora nos interesa revisar la variable respuesta, y notar la condición de los contagiados:
+
+
+```{r, echo=FALSE}
+ggplot(data = data[,] , aes(recuperado)) +
+    geom_bar(col = 6, fill= 6, alpha = 0.4) + 
+    labs(title = "Cantidad de contagiados de covid-19 por condición.", 
+         x= "Condición", y="Conteo") +
+    theme_minimal()
+```
+
+Podemos notar que la cantidad de recuperados es significativamente superior a los fallecidos, esto es esperanzador, ya que a pesar de no contar con las vacunas se tienen en general alta probabilidad de recuperación.
+
+#### Gráficas multivariadas que componen el modelo:
+
+Ahora se realizaran gráficas teniendo en cuenta combinaciones de las anteriores covariables con la variable respuesta, para conocer posibles relaciones:
+
+A continuación se observa cómo se distribuye la edad de los pacientes, según su condición:
+
+```{r, echo=FALSE}
+ggplot(data = data[,], aes(recuperado ,edad))+
+  geom_boxplot(col = 4, fill= 4, alpha = 0.4) + 
+  labs(title = "Estado del paciente en relación a su edad.", x = "Estado", y ="Edad")+
+    theme_minimal()
+
+```
+
+Podemos notar claramente que existe una diferencia significativa entre los fallecidos y los recuperados. Es claro que una mayor edad sobre todo por encima de los 60 años, muestra una cantidad significativa de fallecidos, caso contrario, observamos que la mayor cantidad de recuperados son aproximadamente menores de 55 años. Por lo que podemos concluir que existe una relación entre la edad y la condición del paciente.
+
+Ahora veamos si se observa alguna relación entre género y condición:
+
+
+```{r, echo=FALSE}
+data[,] %>% group_by(recuperado, sexo) %>% count %>% arrange(desc(n)) %>% 
+  ggplot(. , aes(x = recuperado, y = n, fill = sexo ))+
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 0.6)+ 
+    theme_minimal()+
+  labs(title = "Condición del paciente por por genero.", y="Cantidad", x="Condición")
+
+```
+
+Podemos observa que los hombres han fallecido más que las mujeres. Quizás esto se deba a que en general los hombres son más indiferentes al cuidado de la salud en términos médicos que las mujeres. Se nota que hay más mujeres recuperadas que hombres, pero puede ser también debido a que la cantidad de registros son mayores en mujeres que en hombres y como vimos es más probable recuperarse que fallecer. Lo más interesante es encontrar la causa de que los hombres mueran más.
+Podría haber una relación más fuerte entre fallecer y ser hombre.
+
+Miremos la relación entre la condición del paciente y la etnia.
+
+
+```{r, echo=FALSE}
+
+data[,] %>% group_by(recuperado, pertenencia_etnica) %>% count %>% arrange(desc(n)) %>% 
+  ggplot(. , aes(x = recuperado, y = n, fill = pertenencia_etnica ))+
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 0.5)+ 
+    theme_minimal() +
+  labs(title="Condición del paciente por entnia.", y="Cantidad", x="Condición")
+
+```
+
+Con respecto a la etnia 6(ninguna) que es la mayor población, es claro que a mayor número de contagios, mayor número de fallecidos. La gráfica casi no permite distinguir las otras categorías, dada su escala. Por esto realizaremos la siguiente gráfica, basada en las proporciones:
+
+
+
+```{r, warning=F, message=F, echo=FALSE}
+data %>% group_by(pertenencia_etnica, recuperado) %>% summarise(n = n()) %>%
+  mutate(freq = round(n / sum(n), 3)) %>% 
+  ggplot(. , aes(x = recuperado, y = freq, fill = pertenencia_etnica ))+
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 0.5)+ 
+    theme_minimal() +
+  labs(title="Condición del paciente por entnia.", y="Proporción", x="Condición")+
+  geom_text(aes(label=freq), vjust=-0.30, color="black", size=3.5, position = position_dodge(width = 1))
+```
+
+Como se venía observando, la mayor cantidad de contagiados se recuperan, de este resultado podemos notar que la etnia que muestra mayor proporción de fallecidos es 2(ROM) con aproximadamente el 5% de las pacientes, y la menor proporción es para la etnia 3(raizal) con un 1.7% de los fallecidos. Las demás categorías son similares. Podría ser que raizales tienen un sistema inmune mejor y que los ROM peor y que los demás son similares, pero estos resultados pueden estar sujetos a la cantidad de muestras por categoría. Sin embargo, estas relaciones pueden ser significativas.
+
+De lo que se observó anteriormente podríamos concluir que sí existe una relación entre las variables. Permitiremos que sean los modelos mixtos, los que concluyan la significancia de estas variables para predecir si un paciente con determinadas características será clasificad como fallecido o recuperado.
+
+# 4. Modelos a considerar.
+
+Se considerarán 4 modelos, dos de los cuales son lineales generalizado de la familia Bernoulli con la función de enlace logit, y los siguientes dos son modelos lienales generalizados mixtos de la familia Bernoulli con la función de enlace logit. La probabilidad en la que estamos interesados es la de __fallecer__, es decir $P(recuperado = 1)$:
+
+**Modelo 1:** Como se observó, la edad es una variable que mostró una fuerte relación sobre la recuperación o el fallecimiento del paciente, por esto en nuestro primer modelo solo tendremos esta variable edad.
+
+
+$$
+\begin{aligned}
+  \operatorname{recuperado}_{j}  &\sim \operatorname{Bernoulli}({P_{j}}) \\
+    logit(P_{j}) &= \beta_{0} + \beta_{1}(\operatorname{edad_{j}})\\
+\end{aligned}
+$$
+
+
+**Modelo 2:** Ahora se usará el modelo anterior agregando las demás covariables:
+
+
+
+$$
+\begin{aligned}
+&\operatorname{recuperado}_{j}  \sim \operatorname{Bernoulli}({P_{j}}) \\
+&logit(P_{j}) = \beta_0 + \beta_{1}(\operatorname{edad_j}) + \beta_{2}(\operatorname{sexo m_j}_{\operatorname{}}) + \beta_{3}(\operatorname{pertenencia\_etnica_j}_{\operatorname{2}}) + \beta_{4}(\operatorname{pertenencia\_etnica_j}_{\operatorname{3}}) + \\  &\beta_{5}(\operatorname{pertenencia\_etnica_j}_{\operatorname{5}}) + \beta_{6}(\operatorname{pertenencia\_etnica_j}_{\operatorname{6}})\\
+\end{aligned}
+$$
+
+**Modelo 3:** Para este modelo aplicaremos una componente aleatoria, se considerarán las variables del modelo 2, pero se usará un intercepto aleatorio que corresponde al municipio, el cual tiene más de 1000 categorías.
+
+
+$$
+\begin{aligned}
+&\operatorname{recuperado}_{i,j}|b_0  \sim \operatorname{Bernoulli}({P_{i,j}}) \\
+&logit(P_{i,j}) =  \beta_0 + \beta_{1}(\operatorname{edad_{i,j}}) + \beta_{2}(\operatorname{sexom_{i,j}}_{\operatorname{}}) + \beta_{3}(\operatorname{pertenencia\_etnica2_{i,j}}+ \beta_{4}(\operatorname{pertenencia\_etnica3_{i,j}}+ \\ 
+&\beta_{5}(\operatorname{pertenencia\_etnica5_{i,j}}+ \beta_{6}(\operatorname{pertenencia\_etnica6_{i,j}}+ b_{0,i}\\
+&b_{0}  \sim N \left(0, \sigma^2_{b_{0}} \right)
+\end{aligned}
+$$
+
+**Modelo 4:** Finalmente se realizará un modelo con interceptor y pendiente aleatoria, tomando el modelo 3 con las todas las covariables que hasta el momento hemos utilizado y añadimos una pendiente aleatoria debido a la edad.
+
+
+$$
+\begin{aligned}
+&\operatorname{recuperado}_{i,j}|b_0,b1  \sim \operatorname{Bernoilli}({P_{i,j}}) \\
+&logit(P_{i,j}) =  \beta_0 + \beta_{1}(\operatorname{edad_{i,j}}) + \beta_{2}(\operatorname{sexom_{i,j}}_{\operatorname{}}) + \beta_{3}(\operatorname{pertenencia\_etnica2_{i,j}}) + \beta_{4}(\operatorname{pertenencia\_etnica3_{i,j}}) + \\  &\beta_{5}(\operatorname{pertenencia\_etnica5_{i,j}}) +
+\beta_{6}(\operatorname{pertenencia\_etnica6_{i,j}}) + b_{0,i}  + b_{1,i} edad_{i,j}\\
+&\left(
+  \begin{array}{c} 
+    \begin{aligned}
+      &b_{0} \\
+      &b_{1}
+    \end{aligned}
+  \end{array}
+\right)
+  \sim N \left(
+\left(
+  \begin{array}{c} 
+    \begin{aligned}
+      &0 \\
+      &0
+    \end{aligned}
+  \end{array}
+\right)
+, 
+\left(
+  \begin{array}{cc}
+     \sigma^2_{b_0} & \sigma_{b_{0,1}} \\ 
+     \sigma_{b_{0,1}} & \sigma^2_{b_1}
+  \end{array}
+\right)
+ \right)
+\end{aligned}
+$$
+
+
+# 5.Construcción de los modelos.
+
+A continuación, se muestra el código con el cual fueron ajustados los modelos. Posteriormente se mostrarán las tablas de valores ajustados correspondientes.
+
+```{r, eval=F}
+mod1 <- glm(recuperado ~ edad
+              family = binomial(link = "logit"),
+              data = data2
+              )
+
+
+mod2 <- glm(recuperado ~ edad + sexo + pertenencia_etnica,
+              family = binomial(link = "logit"),
+              data = data2
+              )
+
+mod3 <- glmer(recuperado ~ edad + sexo + pertenencia_etnica + (1 | cod_municipio),
+              family = binomial(link = "logit"),
+              data = data2
+              )
+
+mod3 <- glmer(recuperado ~ edad + sexo + pertenencia_etnica + (1  + edad | cod_municipio),
+              family = binomial(link = "logit"),
+              data = data2
+              )
+```
+
+
+Dado la gran cantidad de datos y del tiempo de ejecución de los modelos, se guardaron y posteriormente fueron cargados.
+
+
+```{r, eval=T, echo=F}
+mod1 <- readRDS("mod1.RDS")
+mod2 <- readRDS("mod2.RDS")
+mod3 <- readRDS("mod3.RDS")
+mod4 <- readRDS("mod4.RDS")
+```
+
+
+A continuación observaremos las estimaciones de los parámetros ajustados de cada modelo:
+
+**Modelo1:**
+```{r, echo = F}
+summary(mod1)
+```
+
+Podemos notar que tanto su intercepto como variable edad son significativas para el modelo, esto era de esperarse dadas la relaciones gráficas entre la condición (fallecido o recuperado) del paciente y la edad, vistas anteriormente.
+
+
+
+**Modelo2:**
+```{r, echo = F}
+summary(mod2)
+```
+
+Se puede observar claramente que las nuevas variables de etnia y de sexo son consideradas como significativas para el modelo. Esto también es una confirmación de lo que se observó previamente en las gráficas.
+
+
+**Modelo3:**
+```{r, echo = F}
+summary(mod3)
+```
+
+Al añadir al modelo 2 un intercepto aleatorio debido al municipio con más de 1000 categorías, podemos notar que la varianza asociada a esta componente aleatoria es mayor que cero, con esto podemos concluir que la cantidad de pacientes sí es influenciado por el municipio (Esto también fue visto gráficamente). Posteriormente, se realizarán las correspondientes pruebas de hipótesis para comprobar la significancia, ya que aunque la varianza no es cero, está cerca.
+
+
+**Modelo4:**
+```{r, echo = F}
+summary(mod4)
+```
+
+Se añade además la pendiente aleatoria debido a la edad, por considerarse una variable de grán influencia en la condición del paciente. El modelo ajustado da una varianza cercana a cero  para la pendiente, pero podría ser significativa. Para comprobar esto posteriormente se realizará su correspondinte prueba.
+
+# 6. Comparación de los modelos.
+
+Los cuatro modelos fueron ajustados mediante el método de máxima verosimilitud. Para los efectos fijos y aleatorios(según [5] "Testing significance of random effects" se puede utilizar), utilizaremos la prueba de razón de verosimilitud o mejor su log verosimilitud descrita por $LR = -2 \times lokLik(modelo1) - lokLik(modelo2)$. También se usará la función __anova__ para concluir de la significancia de añadir efectos fijos o aleatorios. Usualmente, los valores P son anticonservativos, y una manera de solucionarlo es mediante simulación y la distribución empírica del estadístico[4]. La prueba de hipótesis para los efectos fijos será:
+
+$H_0:$ La variable X no aporta al modelo vs. $H_1:$ La varaible X aporta al modelo.
+
+El estadístico lo asumimos $LR \sim \chi^2_{n}$, sus grados de libertad n será el número de parámetros del modelo más grande menos los del modelo pequeño. Se utilizará una significancia de $\alpha=0.05$ para aceptar o rechazar $H_0$.
+
+**Ahora aplicamos LR para el modelo 1 y el 2:**
+
+Esta prueba sobres los efectos fijos, mostrará la significancia de añadir al modelo 1, las variables sexo y etnia. Su correspondiente prueba de hipótesis será:
+
+$H_0:$ Las variables sexo y etnia no aportan al modelo. vs $H_1:$ La variable sexo y etnia aportan al modelo.
+
+
+
+
+```{r}
+lrt <- -2 * (logLik(mod1) - logLik(mod2))
+pchisq(q=lrt, df=7-2, lower.tail=F)
+kable(anova(mod1, mod2, test = "LRT"))
+```
+
+Podemos observar que el valor P es un 0, para ambas formas de realizar la prueba, concluimos que los efectos fijos, de sexo y pertenencia étnica aportan al modelo.
+
+**Ahora comparemos los modelos 2 y 3:**
+Se ejecutará una prueba de hipótesis para componentes de varianza. Para este caso, lo que queremos es verificar la significancia de incluir un intercepto aleatorio debido al código del municipio, por lo tanto, la prueba de hipótesis cambiará:
+
+
+$H_0:$ $\sigma^2_{b_0} = 0$ vs. $H_1:$ $\sigma^2_{b_0}>0$.
+
+
+```{r}
+lrt <- -2 * (logLik(mod2) - logLik(mod3))
+pchisq(q=lrt, df=8-7, lower.tail=F)
+kable(anova(mod3, mod2))
+```
+
+Al rechazar su hipótesis nula, tenemos que el añadir un intercepto aleatorio es significativo para el modelo.
+
+**Finalmente, comparamos el modelo 3 con el 4:**
+
+Para este caso, tomaremos el modelo 3 con interceptor aleatorio, y realizaremos una prueba de hipótesis para otra componente de varianza, en este caso una pendiente aleatoria debida a la edad. Su correspondiente prueba de hipótesis será:
+
+
+
+$$
+\begin{aligned}
+&H_0 : 
+D = \left(
+  \begin{array}{cc}
+     \sigma^2_{b_0} > 0 & \sigma_{b_{0,1}} = 0 \\ 
+     \sigma_{b_{0,1}} = 0 & \sigma^2_{b_1} = 0
+  \end{array}
+\right) \\ 
+&vs. \\  \\
+&H_1: D \not = 0
+\end{aligned}
+$$
+
+
+Para este caso la distribución asintótica del estadístico de razón de verosimilitud es una mezcla de $\chi^2_2\chi^2_1$ con pesos iguales a 0.5. Sin embargo, como se mencionó anteriormente se podría utilizar la prueba $LR$.
+
+
+```{r}
+lrt <- -2 * (logLik(mod3) - logLik(mod4))
+(pchisq(q=lrt, df=10-8, lower.tail=F))
+kable(anova(mod3, mod4))
+```
+
+Probemos también con la mezcla de distribuciones $\chi^2$:
+
+
+```{r}
+p_value <- 0.5 * (1-pchisq(lrt, 1)) + 0.5 * (1-pchisq(lrt, 2))
+p_value <- as.numeric(p_value)
+p_value  # p-value from equal mixture chi_1^2:chi_2^2
+```
+
+El resultado es igual que para cada método probado. Al observar esto, podemos concluir que añadir una pendiente aleatoria al modelo es significativo.
+
+Una forma más resumida de presentar las pruebas hechas anteriormente es la siguiente:
+
+
+```{r}
+anova(mod4, mod2, mod3, mod1) %>% kableExtra::kable()
+```
+
+Donde podemos ver que cada modelo, aporta de manera significativa al modelo anterior. Por esto se concluye que el modelo 4 es la mejor opción.
+
+Nota: Los valores P obtenidos, parecen ser anticonservativos, dado que son demasiado pequeños, prácticamente son cero. Para manejar este problema y encontrar el valor P, la simulación es el método adecuado como se mencionó anteriormente, pero con el propósito de avanzar en los resultados hallados, se continuará con el modelo 4 como mejor opción.
+
+
+```{r, eval=F, echo=FALSE}
+library(performance)
+
+compare_performance(mod1, mod2, rank = TRUE) # demasiado tiempo. Y Solo comaparé los dos más simples.
+library(see)
+plot(compare_performance(fit1, fit2, fit3, rank = TRUE))
+```
+
+
+# 7. Análisis de residuales.
+
+Lo primero que deseamos verificar en el análisis de residuos es el supuesto de varianza constante, pero hay un pequeño detalle, dado que estamos modelando una variable dicótoma, el gráfico de valores ajustados contra residuales, no muestra información sobre este supuesto, tampoco sobre el supuesto de normalidad, como sea observa a continuación:
+
+
+```{r, eval=F, echo=FALSE}
+par(mfrow=c(1,2))
+qqnorm(y = residuals(mod4))
+qqline(y = residuals(mod4), col ="red")
+plot(y = residuals(mod4), x = fitted.values(mod4))
+beepr::beep(8)
+```
+
+
+![](qq y residuals.png)
+
+No es la manera más correcta que nos permite observar el cumplimiento de estos supuestos.
+
+Para encontrar una solución que sea más acorde al problema de analizar los residuales de un modelo __GLMM__, tenemos a disposición la librería __DHARMa__, que nos provee de un método mejor para estimar estos supuestos. Lo que hace el método es:
+
+**1** Simula nuevos datos desde el modelo para cada observación:
+
+**2** Para las simulaciones de cada observación, se realiza la función de densidad acumulada empírica, la cual describe sus posibles valores simulados y probabilidad.
+
+**3** Luego el residual es definido como el valor de la densidad empírica evaluada en el valor del dato observado, un residual de 0 significa que los valores simulados son mayores que los observados y un residual de 0.5 significa que la mitad de los valores simulados son mayores que los observados.
+
+Finalmente, todos nuestros residuales estarán restringidos a valores continuos entre 0 y 1. A continuación una gráfica para entender mejor el proceso:
+
+
+![Gráfico de simulaciones con distribución empírica acumulada, de (6)](DHARMa_method.png)
+
+Si desea conocer más del tema, porfavor ingrese al siguiente [enlace](https://cran.r-project.org/web/packages/DHARMa/vignettes/DHARMa.html#lme4).
+
+```{r, eval=F, echo=F}
+
+# Exite un problema del tamaño de memoria para realiza el algoritmo, relacionado con el tamaño de memoria, los resultado y sus tamaños muestrales estan comentados. Esto puede ser debido a los mas de dos millones de datos. 
+t1 <- Sys.time()
+simulationOutput <- simulateResiduals(fittedModel = mod4, n=20, plot = F)
+#Error in U %*% matrix(u, ncol = nsim) : 
+#Cholmod error 'out of memory' at file ../Core/cholmod_memory.c, line 146: n = 250
+#Error: cannot allocate vector of size 1.7 Gb.  n = 100
+# Error: cannot allocate vector of size 849.5 Mb. n = 50
+# Error: cannot allocate vector of size 679.6 Mb n = 40
+# Error: cannot allocate vector of size 509.7 Mb. n = 30
+beep(8); 
+t2 <- Sys.time()
+t2-t1
+plot(simulationOutput)
+```
+
+Utilizaremos esta la función __simulateResiduals__  para encontrar estos resultados:
+```{r, eval=FALSE}
+simulationOutput <- simulateResiduals(fittedModel = mod4, n=20, plot = F)
+plot(simulationOutput)
+```
+
+
+Finalmente, obtenemos los siguientes resultados:
+
+
+![](residuals_mod4.png)
+
+Desde la gráfica de la izquierda podemos observar que los datos tienen un comportamiento de normalidad visualmente correcto. Sin embargo, el KS test (Kolmogorov Smirnov de normalidad) nos dice que el modelo tiene problemas con este supuesto, ya que dado su valor P de cero, rechazaría $H_0:$ de que los datos se distribuye normal. Para el caso de la homocedasticidad (gráfica derecha), solo podemos observar una especie de mancha gris, esto es debido a los más de 2 millones de datos, lo que es claro es que los datos se observan dispersos por toma la imagen, de esta manera podríamos decir que sí cumple el supuesto.
+
+__Conclución:__ Se considera que el modelo puede tener algunos problemas con el supuesto de normalidad, pero visualmente podríamos aceptarlo, de la misma manera visualmente podemos asumir homocedasticidad. Por lo tanto, se considerará como modelo válido.
+
+# 8. Presentación del mejor modelo.
+
+De todos los modelos el mejor fue el modelo con todas las covariables de efectos fijos y efectos aleatorios, con interceptor y pendiente.
+
+El modelo, ajustado será el siguiente:
+
+
+$$
+\begin{aligned}
+&\operatorname{recuperado}_{i,j}|b_0,b1  \sim \operatorname{Bernoilli}({P_{i,j}}) \\ \\
+&logit(\hat{P_{i,j})} =  -4.9617 + 1.6412(\operatorname{edad_{i,j}}) + 0.7534 (\operatorname{sexom_{i,j}}_{\operatorname{}}) + 0.1047 (\operatorname{pertenencia\_etnica2_{i,j}}) \\ &-0.6081(\operatorname{pertenencia\_etnica3_{i,j}}) -0.146070(\operatorname{pertenencia\_etnica5_{i,j}}) \\
+&-0.1562(\operatorname{pertenencia\_etnica6_{i,j}}) + b_{0,i}  + b_{1,i} edad_{i,j}\\ \\
+&\left(
+  \begin{array}{c} 
+    \begin{aligned}
+      &b_{0} \\
+      &b_{1}
+    \end{aligned}
+  \end{array}
+\right)
+  \sim N \left(
+\left(
+  \begin{array}{c} 
+    \begin{aligned}
+      &0 \\
+      &0
+    \end{aligned}
+  \end{array}
+\right)
+, 
+\left(
+  \begin{array}{cc}
+     0.31450 & -0.06113 \\ 
+     -0.06113 & 0.02813
+  \end{array}
+\right)
+ \right)
+\end{aligned}
+$$
+
+
+# 9. Sugerencias:
+
+Dados los resultados hallados, resulta importante tener en cuenta, el realizar simulaciones para contrarrestar el efecto antivonservativo de las pruebas de hipótesis. También, se recomienda, ejecutar un análisis más profundo de los residuales investigando más a profundidad, para realizar un diagnóstico más completo. Sería bastante interesante, conocer y discriminar a los modelos también por su capacidad predictiva, utilizando la matriz de confusión y sus correspondientes __Accuracy__, __sensitivity__ y __specificity__, inclusive su curva **ROC**.
+
+Si desea acceder a todo el código puede acceder a el, en el siguiente [enlace](https://cran.r-project.org/web/packages/DHARMa/vignettes/DHARMa.html#lme4).
+
+
+
+# 10. Referencias:
+
+```{r, eval=F, echo=F}
+# Como punto final será interesante verificar que tan bueno es el modelo para predecir si un paciente determinado fallecerá o no.
+x5 <- predict(mod4, type="response")
+#x5[which(x5 >= 0.5)] = 0
+x6 <- ifelse(x5 >= 0.5, 1, 0)
+x7 <- table(x6, data2$recuperado)
+kableExtra::kable(x7)
+```
+
+
+
+```{r, eval=F, echo=F}
+library(caret)
+sensitivity(x7)
+specificity(x7)
+
+sum(diag(x7))/sum(x7)
+```
+
+
+[1] (29 01 2021). Colombia comenzará la vacunación contra el covid-19 el 20 de febrero. minsalud.gov.co.
+https://www.minsalud.gov.co/Paginas/Colombia-comenzara-la-vacunacion-contra-el-covid-19-el-20-de-febrero-.aspx
+
+[2] NoonIcarus. (18 01 2022) COVID-19. wikipedia. https://es.wikipedia.org/w/index.php?title=COVID-19&oldid=141050097.
+
+
+[3] Velasquez. P. (31 03 2020).Fase de mitigación en Colombia por Covid-19. consultorsalud. https://consultorsalud.com/fase-de-mitigacion-en-colombia-por-covid-19/
+
+[4] Hernández F, Martínez L. (03 02 2022). Modelos Mixtos con R. fhernanb.github.io. https://fhernanb.github.io/libro_modelos_mixtos/
+
+
+[5] Bolker B. (04 10 2021). GLMM FAQ. bbolker.github.io. https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html#testing-significance-of-random-effects
+
+[6] Hartig F. (12 01 2022). DHARMa: residual diagnostics for hierarchical (multi-level/mixed) regression models. cran.r-project.org. https://cran.r-project.org/web/packages/DHARMa/vignettes/DHARMa.html#lme4
+
+[7] Zárate A. (23 11, 2020). NADA HA CAMBIADO: MERCADOS DE WUHAN, CHINA, DONDE NACIÓ EL COVID-19.
+ciudadtrendy.mx. http://ciudadtrendy.mx/mercados-wuhan-china-nacio-covid-19/
+
+[8] Hernandez N. (28 04 2020). SÍNTESIS DEL CORONAVIRUS EN EL MUNDO. domingo7. https://domingo7.com.mx/sintesis-del-coronavirus-en-el-mundo-5/
+
+ 
