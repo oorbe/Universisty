@@ -606,7 +606,7 @@ $$
 
 Dados los resultados hallados, resulta importante tener en cuenta, el realizar simulaciones para contrarrestar el efecto antivonservativo de las pruebas de hipótesis. También, se recomienda, ejecutar un análisis más profundo de los residuales investigando más a profundidad, para realizar un diagnóstico más completo. Sería bastante interesante, conocer y discriminar a los modelos también por su capacidad predictiva, utilizando la matriz de confusión y sus correspondientes __Accuracy__, __sensitivity__ y __specificity__, inclusive su curva **ROC**.
 
-Si desea acceder a todo el código puede acceder a el, en el siguiente [enlace](https://cran.r-project.org/web/packages/DHARMa/vignettes/DHARMa.html#lme4).
+Si desea acceder a todo el código puede acceder a el, en el siguiente [enlace](https://github.com/oorbe/Universisty/blob/main/10/Modelos%20jerarquicos/Seminario%20mod%20jerarquicos.Rmd).
 
 
 
